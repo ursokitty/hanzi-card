@@ -376,6 +376,68 @@
     color:var(--green);
   }
   .addmsg.err{color:var(--red);}
+  .quickadd{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    align-items:center;
+  }
+  .qa-input{
+    font-family:var(--sys-font);
+    font-size:14px;
+    padding:9px 10px;
+    border:1px solid var(--line);
+    border-radius:10px;
+    background:var(--surface);
+    color:var(--ink);
+  }
+  .qa-input:focus{outline:2px solid var(--accent); outline-offset:1px;}
+  .qa-hanzi{width:70px; flex:0 0 70px;}
+  .qa-pinyin{width:110px; flex:1 1 110px;}
+  .qa-meaning{flex:1 1 140px;}
+  .quickadd .addbtn{margin-top:0; flex:0 0 auto;}
+  .wordlist{
+    margin-top:14px;
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+    max-height:240px;
+    overflow-y:auto;
+  }
+  .worditem{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    background:var(--surface);
+    border-radius:10px;
+    padding:8px 12px;
+  }
+  .worditem .wi-text{
+    display:flex;
+    gap:8px;
+    align-items:baseline;
+    overflow:hidden;
+  }
+  .worditem .wi-hanzi{font-weight:600; font-size:14px; color:var(--ink); flex:0 0 auto;}
+  .worditem .wi-pinyin{color:var(--accent); font-size:12px; flex:0 0 auto;}
+  .worditem .wi-meaning{color:var(--ink-soft); font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .worditem .wi-del{
+    border:none;
+    background:none;
+    color:var(--ink-faint);
+    font-size:17px;
+    line-height:1;
+    cursor:pointer;
+    padding:2px 4px;
+    flex:0 0 auto;
+  }
+  .worditem .wi-del:hover{color:var(--red);}
+  .wordlist-empty{
+    font-size:12px;
+    color:var(--ink-faint);
+    padding:4px 2px;
+  }
   footer{
     margin-top:30px;
     font-size:12px;
@@ -446,14 +508,18 @@
 
   <div class="customarea">
     <h2>내 단어 추가하기</h2>
-    <p>한 줄에 하나씩, "한자,병음,뜻" 형식으로 붙여넣으세요. 예: 加油,jiāyóu,힘내다</p>
-    <textarea id="customInput" placeholder="加油,jiāyóu,힘내다"></textarea>
-    <br>
-    <button class="addbtn" id="addCustomBtn">내 단어장에 추가</button>
+    <p>외우다가 생각날 때 바로바로 추가하세요. 병음은 몰라도 비워둘 수 있어요.</p>
+    <div class="quickadd">
+      <input type="text" id="qaHanzi" class="qa-input qa-hanzi" placeholder="한자" maxlength="20">
+      <input type="text" id="qaPinyin" class="qa-input qa-pinyin" placeholder="병음 (선택)" maxlength="40">
+      <input type="text" id="qaMeaning" class="qa-input qa-meaning" placeholder="뜻" maxlength="60">
+      <button class="addbtn" id="addCustomBtn">추가</button>
+    </div>
     <div class="addmsg" id="addMsg"></div>
+    <div class="wordlist" id="customList"></div>
   </div>
 
-  <footer>새로고침하면 학습 기록이 초기화됩니다 · Space 뒤집기 · ← → 이동</footer>
+  <footer>내가 추가한 단어는 새로고침해도 저장돼요 · 외운 표시는 새로고침하면 초기화돼요 · Space 뒤집기 · ← → 이동</footer>
 </div>
 
 <script>
@@ -466,9 +532,28 @@ var DATA = {
   "6":[["癌症","áizhèng","암"],["爱戴","àidài","추대하다"],["暧昧","àimèi","모호하다"],["安居乐业","ānjūlèyè","편안히 살고 즐겁게 일하다"],["安宁","ānníng","평안하다"],["安详","ānxiáng","차분하다"],["安置","ānzhì","안치하다"],["按摩","ànmó","마사지"],["案例","ànlì","사례"],["暗示","ànshì","암시하다"],["昂贵","ángguì","비싸다"],["熬","áo","오래 끓이다, 견디다"],["奥秘","àomì","비밀"],["巴不得","bābude","간절히 바라다"],["罢工","bàgōng","파업하다"],["把关","bǎguān","검사하다"],["霸道","bàdào","횡포하다"],["拜托","bàituō","부탁하다"],["扮演","bànyǎn","역을 맡다"],["半途而废","bàntú'érfèi","중도 포기하다"]]
 };
 
+var CUSTOM_KEY = "hanziCram_customWords_v1";
+
+function loadCustom(){
+  try{
+    var raw = localStorage.getItem(CUSTOM_KEY);
+    if(!raw) return [];
+    var parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  }catch(e){
+    return [];
+  }
+}
+
+function saveCustom(){
+  try{
+    localStorage.setItem(CUSTOM_KEY, JSON.stringify(state.custom));
+  }catch(e){}
+}
+
 var state = {
   level: "1",
-  custom: [],
+  custom: loadCustom(),
   deck: [],
   index: 0,
   flipped: false,
@@ -615,7 +700,8 @@ document.getElementById("filterChk").onchange = function(e){
 
 document.addEventListener("keydown", function(e){
   if(state.mode !== "card") return;
-  if(document.activeElement.tagName === "TEXTAREA") return;
+  var activeTag = document.activeElement.tagName;
+  if(activeTag === "TEXTAREA" || activeTag === "INPUT") return;
   if(e.code === "Space"){ e.preventDefault(); state.flipped = !state.flipped; renderCard(); }
   if(e.code === "ArrowRight"){ document.getElementById("nextBtn").click(); }
   if(e.code === "ArrowLeft"){ document.getElementById("prevBtn").click(); }
@@ -714,35 +800,86 @@ document.getElementById("qNextBtn").onclick = function(){
   startQuizQuestion();
 };
 
-document.getElementById("addCustomBtn").onclick = function(){
-  var raw = document.getElementById("customInput").value.trim();
-  var msg = document.getElementById("addMsg");
-  if(!raw){
-    msg.textContent = "단어를 입력해 주세요.";
-    msg.className = "addmsg err";
+function renderCustomList(){
+  var wrap = document.getElementById("customList");
+  wrap.innerHTML = "";
+  if(state.custom.length === 0){
+    wrap.innerHTML = "<div class=\"wordlist-empty\">아직 추가한 단어가 없어요.</div>";
     return;
   }
-  var lines = raw.split("\n").map(function(l){return l.trim();}).filter(Boolean);
-  var added = 0;
-  lines.forEach(function(line){
-    var parts = line.split(",").map(function(p){return p.trim();});
-    if(parts.length >= 3 && parts[0]){
-      state.custom.push([parts[0], parts[1], parts.slice(2).join(",")]);
-      added++;
-    }
+  state.custom.forEach(function(w, i){
+    var item = document.createElement("div");
+    item.className = "worditem";
+    var text = document.createElement("div");
+    text.className = "wi-text";
+    var hanziSpan = document.createElement("span");
+    hanziSpan.className = "wi-hanzi";
+    hanziSpan.textContent = w[0];
+    var pinyinSpan = document.createElement("span");
+    pinyinSpan.className = "wi-pinyin";
+    pinyinSpan.textContent = w[1];
+    var meaningSpan = document.createElement("span");
+    meaningSpan.className = "wi-meaning";
+    meaningSpan.textContent = w[2];
+    text.appendChild(hanziSpan);
+    text.appendChild(pinyinSpan);
+    text.appendChild(meaningSpan);
+    var del = document.createElement("button");
+    del.className = "wi-del";
+    del.textContent = "×";
+    del.title = "삭제";
+    del.onclick = function(){ removeCustomWord(i); };
+    item.appendChild(text);
+    item.appendChild(del);
+    wrap.appendChild(item);
   });
-  if(added === 0){
-    msg.textContent = "형식을 확인해 주세요. 예: 加油,jiāyóu,힘내다";
+}
+
+function removeCustomWord(i){
+  var w = state.custom[i];
+  if(w){ delete state.mastered[key("custom", w)]; }
+  state.custom.splice(i, 1);
+  saveCustom();
+  renderLevels();
+  renderCustomList();
+  if(state.level === "custom"){ buildDeck(); renderCard(); renderTally(); }
+}
+
+function addQuickWord(){
+  var hanziEl = document.getElementById("qaHanzi");
+  var pinyinEl = document.getElementById("qaPinyin");
+  var meaningEl = document.getElementById("qaMeaning");
+  var msg = document.getElementById("addMsg");
+  var hanzi = hanziEl.value.trim();
+  var pinyin = pinyinEl.value.trim();
+  var meaning = meaningEl.value.trim();
+  if(!hanzi || !meaning){
+    msg.textContent = "한자와 뜻은 꼭 입력해 주세요.";
     msg.className = "addmsg err";
+    (!hanzi ? hanziEl : meaningEl).focus();
     return;
   }
-  msg.textContent = added + "개 단어를 추가했어요.";
+  state.custom.push([hanzi, pinyin, meaning]);
+  saveCustom();
+  msg.textContent = "\"" + hanzi + "\" 추가했어요.";
   msg.className = "addmsg";
-  document.getElementById("customInput").value = "";
+  hanziEl.value = "";
+  pinyinEl.value = "";
+  meaningEl.value = "";
+  hanziEl.focus();
   renderLevels();
+  renderCustomList();
   if(state.level === "custom"){ buildDeck(); renderCard(); renderTally(); }
-};
+}
 
+document.getElementById("addCustomBtn").onclick = addQuickWord;
+["qaHanzi","qaPinyin","qaMeaning"].forEach(function(id){
+  document.getElementById(id).addEventListener("keydown", function(e){
+    if(e.key === "Enter"){ e.preventDefault(); addQuickWord(); }
+  });
+});
+
+renderCustomList();
 buildDeck();
 renderAll();
 </script>
